@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     # a .env file.
     DATABASE_URL: str = "postgresql+psycopg2://configsync:configsync@db:5432/configsync"
     API_KEY: str = "supersecretkey"
+    # Default to localhost for local dev; Docker overrides via environment
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     model_config = SettingsConfigDict(
         env_file=".env",  # Optional file for environment variables

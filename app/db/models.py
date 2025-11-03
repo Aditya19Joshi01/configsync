@@ -48,3 +48,11 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False, server_default="user", default="user")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+
+    jti = Column(String, primary_key=True, index=True)
+    revoked_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)

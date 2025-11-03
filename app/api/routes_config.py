@@ -7,6 +7,10 @@ from app.db.database import get_db
 from app.db.models import User
 from app.schemas.config_schema import ConfigResponse, ConfigUpdateSchema
 from app.core.security import get_current_user
+from app.tasks.logger import (
+    log_config_update, log_config_retrieval,
+    log_config_update_sync, log_config_retrieval_sync
+)
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
@@ -45,6 +49,12 @@ def list_configs(db: Session = Depends(get_db), user: User = Depends(get_current
             "updated_at": c.updated_at.isoformat() if c.updated_at else None,
             "user_id": c.user_id,
         })
+        # Try to enqueue logging; fallback to sync if broker unavailable
+        try:
+            log_config_retrieval.delay(service_name=c.name, user_email=user.email)
+        except Exception as e:
+            print(f"[routes_config] failed to enqueue log_config_retrieval: {e}")
+            log_config_retrieval_sync(c.name, user.email)
 
     return {"configs": result}
 
@@ -61,6 +71,13 @@ def get_config(service: str, db: Session = Depends(get_db), user: User = Depends
         target_user_id = user.id
 
     config = repo.get_config(service, user_id=target_user_id, current_user=user)
+
+    # Try to enqueue logging; fallback to sync if broker unavailable
+    try:
+        log_config_retrieval.delay(service_name=service, user_email=user.email)
+    except Exception as e:
+        print(f"[routes_config] failed to enqueue log_config_retrieval: {e}")
+        log_config_retrieval_sync(service, user.email)
 
     if not config:
         raise HTTPException(
@@ -84,6 +101,11 @@ def update_config(data: ConfigUpdateSchema, db: Session = Depends(get_db), user:
         target_user_id = user.id
 
     updated = repo.update_or_create_config(data=data, user_id=target_user_id, current_user=user)
+    try:
+        log_config_update.delay(service_name=data.name, user_email=user.email)
+    except Exception as e:
+        print(f"[routes_config] failed to enqueue log_config_update: {e}")
+        log_config_update_sync(data.name, user.email)
     return updated
 
 

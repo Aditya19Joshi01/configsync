@@ -8,9 +8,10 @@ from sqlalchemy.orm.session import Session
 from datetime import timedelta, datetime
 
 import jwt
+import uuid
 
 from app.db.database import get_db
-from app.db.models import User
+from app.db.models import User, RevokedToken
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -32,8 +33,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     expire = datetime.now() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    jti = str(uuid.uuid4())
+    to_encode.update({"exp": expire, "jti": jti})
+    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return token, jti, expire
 
 def decode_access_token(token: str):
     try:
@@ -45,8 +48,15 @@ def decode_access_token(token: str):
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     payload = decode_access_token(token)
     username = payload.get("sub")
+    jti = payload.get("jti")
     if username is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    # Check token revocation table
+    if jti:
+        revoked = db.query(RevokedToken).filter_by(jti=jti).first()
+        if revoked:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
 
     user = db.query(User).filter_by(username=username).first()
     if user is None:
