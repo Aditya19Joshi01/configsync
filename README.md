@@ -58,7 +58,10 @@ ConfigSync/
 │   └── main.py
 ├── requirements.txt
 ├── Dockerfile
-└── docker-compose.yml
+├── docker-compose.yml
+└── Alembic/
+    ├── versions/
+    └── env.py
 
 ````
 
