@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import fastapi_cdn_host
 
 from app.db import models
 from app.db.database import engine
@@ -10,6 +11,9 @@ app = FastAPI(
     description="Centralized configuration management service",
     version="1.0.0"
 )
+
+# Patch to serve swagger UI resources locally
+fastapi_cdn_host.patch_docs(app)
 
 @app.on_event("startup")
 def on_startup():

@@ -20,7 +20,7 @@ services:
     depends_on:
       - db
     environment:
-      DATABASE_URL:
+      DATABASE_URL: "postgresql+psycopg2://configsync:configsync@db:5432/configsync"
       API_KEY: supersecretkey
       PROJECT_NAME: ConfigSync
     ports:
