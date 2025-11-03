@@ -4,6 +4,7 @@ import fastapi_cdn_host
 from app.db import models
 from app.db.database import engine
 from app.api.routes_config import router as config_router
+from app.api.auth import router as auth
 from app.core.config import settings
 
 app = FastAPI(
@@ -28,6 +29,7 @@ def read_root():
 
 # Register routes
 app.include_router(config_router)
+app.include_router(auth)
 
 
 

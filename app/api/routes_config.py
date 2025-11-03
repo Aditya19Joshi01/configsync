@@ -3,9 +3,9 @@ from sqlalchemy.orm.session import Session
 
 from app.db.crud import ConfigRepository
 from app.db.database import get_db
-from app.db.models import ServiceConfig
+from app.db.models import User
 from app.schemas.config_schema import ConfigResponse, ConfigUpdateSchema
-from app.core.security import verify_api_key
+from app.core.security import get_current_user
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
@@ -20,14 +20,14 @@ def health_check():
     return {"api_status": "ok", "db_status": "connected" if db else "disconnected"}
 
 
-@router.get("/list", dependencies=[Depends(verify_api_key)])
-def list_configs(db: Session = Depends(get_db)):
+@router.get("/list", dependencies=[Depends(get_current_user)])
+def list_configs(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """
-    List all available service configurations.
-    Requires API key authentication.
+    List all available service configurations for the current user.
+    Requires authentication.
     """
-    # Query the ServiceConfig model directly and return serializable data
-    configs = db.query(ServiceConfig).all()
+    repo = ConfigRepository(db)
+    configs = repo.list_all_configs_for_user(user.id)
 
     result = []
     for c in configs:
@@ -40,14 +40,14 @@ def list_configs(db: Session = Depends(get_db)):
 
     return {"configs": result}
 
-@router.get("/get", response_model=ConfigResponse, dependencies=[Depends(verify_api_key)])
-def get_config(service: str, db: Session = Depends(get_db)):
+@router.get("/get", response_model=ConfigResponse, dependencies=[Depends(get_current_user)])
+def get_config(service: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """
-    Fetch the configuration for a given service.
+    Fetch the configuration for a given service for the current user.
     Example: GET /config/get?service=payment-service
     """
     repo = ConfigRepository(db)
-    config = repo.get_config(service)
+    config = repo.get_config(service, user.id)
 
     if not config:
         raise HTTPException(
@@ -58,23 +58,23 @@ def get_config(service: str, db: Session = Depends(get_db)):
     return config
 
 
-@router.post("/update", response_model=ConfigResponse, dependencies=[Depends(verify_api_key)])
-def update_config(data: ConfigUpdateSchema, db: Session = Depends(get_db)):
+@router.post("/update", response_model=ConfigResponse, dependencies=[Depends(get_current_user)])
+def update_config(data: ConfigUpdateSchema, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """
-    Update or insert a configuration for a service.
-    Requires API key authentication.
+    Update or insert a configuration for a service for the current user.
+    Requires authentication.
     """
     repo = ConfigRepository(db)
-    updated = repo.update_or_create_config(data=data)
+    updated = repo.update_or_create_config(data=data, user_id=user.id)
     return updated
 
 
-@router.get("/versions/{service_name}", dependencies=[Depends(verify_api_key)])
-def list_versions(service_name: str, db: Session = Depends(get_db)):
+@router.get("/versions/{service_name}", dependencies=[Depends(get_current_user)])
+def list_versions(service_name: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """
-    List all configuration versions for a given service.
-    Requires API key authentication.
+    List all configuration versions for a given service for the current user.
+    Requires authentication.
     """
     repo = ConfigRepository(db)
-    versions = repo.list_versions(service_name)
+    versions = repo.list_versions(service_name, user.id)
     return {"service_name": service_name, "versions": versions}
