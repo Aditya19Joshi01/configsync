@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, JSON, DateTime, func
+from datetime import datetime
 from app.db.database import Base
 
 class ServiceConfig(Base):
@@ -16,3 +17,12 @@ class ServiceConfig(Base):
         onupdate=func.now(),
         nullable=False
     )
+
+class ConfigVersion(Base):
+    __tablename__ = "config_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    service_name = Column(String, index=True)
+    version = Column(Integer)
+    config = Column(JSON)
+    created_at = Column(DateTime, default=datetime.now)
