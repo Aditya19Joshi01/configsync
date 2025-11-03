@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 
@@ -18,7 +18,8 @@ class ConfigResponse(BaseModel):
     id: int
     name: str
     config: Dict[str, Any]
-    updated_at: datetime
+    updated_at: Optional[datetime]
+    user_id: int
 
     class Config:
         from_attributes = True  # Enables compatibility with SQLAlchemy models (Pydantic v2)

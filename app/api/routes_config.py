@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm.session import Session
+from typing import Optional
 
 from app.db.crud import ConfigRepository
 from app.db.database import get_db
@@ -21,13 +22,19 @@ def health_check():
 
 
 @router.get("/list", dependencies=[Depends(get_current_user)])
-def list_configs(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_configs(db: Session = Depends(get_db), user: User = Depends(get_current_user), target_user_id: Optional[int] = Query(None, description="(admin-only) user id to list configs for")):
     """
-    List all available service configurations for the current user.
-    Requires authentication.
+    List available service configurations.
+    - Admins: can pass `target_user_id` to list another user's configs or omit to list all configs.
+    - Normal users: only their own configs (ignore `target_user_id`).
     """
     repo = ConfigRepository(db)
-    configs = repo.list_all_configs_for_user(user.id)
+
+    if getattr(user, 'role', None) != 'admin':
+        # ignore any target_user_id and force user's own id
+        target_user_id = user.id
+
+    configs = repo.list_all_configs_for_user(user_id=target_user_id, current_user=user)
 
     result = []
     for c in configs:
@@ -36,18 +43,24 @@ def list_configs(db: Session = Depends(get_db), user: User = Depends(get_current
             "name": c.name,
             "config": c.config,
             "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+            "user_id": c.user_id,
         })
 
     return {"configs": result}
 
 @router.get("/get", response_model=ConfigResponse, dependencies=[Depends(get_current_user)])
-def get_config(service: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_config(service: str, db: Session = Depends(get_db), user: User = Depends(get_current_user), target_user_id: Optional[int] = Query(None, description="(admin-only) user id to fetch config for")):
     """
-    Fetch the configuration for a given service for the current user.
-    Example: GET /config/get?service=payment-service
+    Fetch the configuration for a given service.
+    - Admins: may specify `target_user_id` or omit to fetch the first matching service across users.
+    - Normal users: will only fetch their own service config.
     """
     repo = ConfigRepository(db)
-    config = repo.get_config(service, user.id)
+
+    if getattr(user, 'role', None) != 'admin':
+        target_user_id = user.id
+
+    config = repo.get_config(service, user_id=target_user_id, current_user=user)
 
     if not config:
         raise HTTPException(
@@ -59,22 +72,32 @@ def get_config(service: str, db: Session = Depends(get_db), user: User = Depends
 
 
 @router.post("/update", response_model=ConfigResponse, dependencies=[Depends(get_current_user)])
-def update_config(data: ConfigUpdateSchema, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def update_config(data: ConfigUpdateSchema, db: Session = Depends(get_db), user: User = Depends(get_current_user), target_user_id: Optional[int] = Query(None, description="(admin-only) user id to update config for")):
     """
-    Update or insert a configuration for a service for the current user.
-    Requires authentication.
+    Update or insert a configuration for a service.
+    - Admins: may pass `target_user_id` to update another user's config.
+    - Normal users: update their own config only.
     """
     repo = ConfigRepository(db)
-    updated = repo.update_or_create_config(data=data, user_id=user.id)
+
+    if getattr(user, 'role', None) != 'admin':
+        target_user_id = user.id
+
+    updated = repo.update_or_create_config(data=data, user_id=target_user_id, current_user=user)
     return updated
 
 
 @router.get("/versions/{service_name}", dependencies=[Depends(get_current_user)])
-def list_versions(service_name: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_versions(service_name: str, db: Session = Depends(get_db), user: User = Depends(get_current_user), target_user_id: Optional[int] = Query(None, description="(admin-only) user id to list versions for")):
     """
-    List all configuration versions for a given service for the current user.
-    Requires authentication.
+    List all configuration versions for a given service.
+    - Admins: may pass `target_user_id` to list versions for another user or omit to list versions across users for that service name.
+    - Normal users: list versions only for their own service.
     """
     repo = ConfigRepository(db)
-    versions = repo.list_versions(service_name, user.id)
+
+    if getattr(user, 'role', None) != 'admin':
+        target_user_id = user.id
+
+    versions = repo.list_versions(service_name, user_id=target_user_id, current_user=user)
     return {"service_name": service_name, "versions": versions}

@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
-from app.db.models import ServiceConfig, ConfigVersion
+from typing import Optional
+from app.db.models import ServiceConfig, ConfigVersion, User
 from app.schemas.config_schema import ConfigUpdateSchema
 
 
@@ -7,56 +8,90 @@ class ConfigRepository:
     """
     Handles all database operations related to service configurations.
     Acts as an abstraction layer between the DB and business logic.
-    Now scoped to a user via user_id to ensure users only see their own configs.
+    Now supports RBAC: if `current_user` is admin, operations may span all users.
     """
 
     def __init__(self, db: Session):
         self.db = db
 
-    def get_config(self, service_name: str, user_id: int):
-        """Fetch the configuration for a given service belonging to user."""
-        return (
-            self.db.query(ServiceConfig)
-            .filter_by(name=service_name, user_id=user_id)
-            .first()
-        )
+    def _is_admin(self, current_user: Optional[User]) -> bool:
+        return getattr(current_user, 'role', None) == 'admin'
 
-    def update_or_create_config(self, data: ConfigUpdateSchema | None = None, config_data: ConfigUpdateSchema | None = None, user_id: int | None = None):
+    def get_config(self, service_name: str, user_id: Optional[int] = None, current_user: Optional[User] = None):
+        """Fetch the configuration for a given service. If current_user is admin and user_id is None, don't filter by user."""
+        query = self.db.query(ServiceConfig)
+        if self._is_admin(current_user):
+            # admin: allow specifying a target user_id or no restriction
+            if user_id is not None:
+                query = query.filter_by(name=service_name, user_id=user_id)
+            else:
+                query = query.filter_by(name=service_name)
+        else:
+            # normal user: require user_id
+            if user_id is None:
+                raise ValueError("user_id is required for non-admin operations")
+            query = query.filter_by(name=service_name, user_id=user_id)
+
+        return query.first()
+
+    def update_or_create_config(self, data: ConfigUpdateSchema | None = None, config_data: ConfigUpdateSchema | None = None, user_id: int | None = None, current_user: Optional[User] = None):
         """Update existing config or create a new one for the given user.
 
-        Accepts either `data` (current callers) or `config_data` (legacy callers / static analysis expectations).
+        Admins may omit user_id to operate globally (or pass a specific user_id).
+        Behavior change: if an admin omits user_id and a config with the given name exists for some user,
+        update that existing config (preserve its owner) so the owner sees the admin's changes. If no
+        existing config exists, create a new config owned by the admin (or by `user_id` if provided).
         """
         input_data = data or config_data
         if input_data is None:
             raise ValueError("No configuration data provided to update_or_create_config")
-        if user_id is None:
-            raise ValueError("user_id is required to scope config operations")
 
-        db_config = self.get_config(input_data.name, user_id)
+        # Attempt to find an existing config according to permissions/context
+        db_config = self.get_config(input_data.name, user_id=user_id, current_user=current_user)
 
         if db_config:
+            # Update the found config (preserve its user_id)
             db_config.config = input_data.config
             self.db.commit()
             self.db.refresh(db_config)
+            owner_id = db_config.user_id
         else:
-            db_config = ServiceConfig(name=input_data.name, config=input_data.config, user_id=user_id)
+            # No existing config found. Determine owner for the new config:
+            # - If caller provided a user_id, use it.
+            # - Else if current_user present, default to current_user.id (admin will own it unless they specified user_id).
+            # - For non-admins, user_id must be provided via current_user.
+            if user_id is None:
+                if current_user is None:
+                    raise ValueError("user_id is required to scope config operations")
+                owner_id = getattr(current_user, 'id', None)
+            else:
+                owner_id = user_id
+
+            if owner_id is None:
+                raise ValueError("Unable to determine owner for new config")
+
+            db_config = ServiceConfig(name=input_data.name, config=input_data.config, user_id=owner_id)
             self.db.add(db_config)
             self.db.commit()
             self.db.refresh(db_config)
 
-        # Add a version entry for history
-        self.add_new_version(input_data.name, input_data.config, user_id)
+        # Add a version entry for history under the owner of the config (so the owner sees the change)
+        self.add_new_version(db_config.name, input_data.config, db_config.user_id)
         return db_config
 
-    def get_latest_version(self, service_name: str, user_id: int):
+    def get_latest_version(self, service_name: str, user_id: int, current_user: Optional[User] = None):
         """Fetch the latest configuration version for a given service for the user."""
         db = self.db
-        return (
-            db.query(ConfigVersion)
-            .filter_by(service_name=service_name, user_id=user_id)
-            .order_by(ConfigVersion.version.desc())
-            .first()
-        )
+        query = db.query(ConfigVersion)
+        if self._is_admin(current_user):
+            if user_id is not None:
+                query = query.filter_by(service_name=service_name, user_id=user_id)
+            else:
+                query = query.filter_by(service_name=service_name)
+        else:
+            query = query.filter_by(service_name=service_name, user_id=user_id)
+
+        return query.order_by(ConfigVersion.version.desc()).first()
 
     def add_new_version(self, service_name: str, config: dict, user_id: int):
         """Add a new configuration version for a given service for the user."""
@@ -76,20 +111,35 @@ class ConfigRepository:
         self.db.refresh(new_version)
         return new_version
 
-    def list_versions(self, service_name: str, user_id: int):
-        """List all configuration versions for a given service for the user."""
-        db = self.db
-        return (
-            db.query(ConfigVersion)
-            .filter_by(service_name=service_name, user_id=user_id)
-            .order_by(ConfigVersion.version.desc())
-            .all()
-        )
+    def list_versions(self, service_name: str, user_id: Optional[int] = None, current_user: Optional[User] = None):
+        """List all configuration versions for a given service for the user.
 
-    def list_all_configs_for_user(self, user_id: int):
-        """Helper to list all current service configs for the user."""
-        return (
-            self.db.query(ServiceConfig)
-            .filter_by(user_id=user_id)
-            .all()
-        )
+        Admins may omit user_id to list across all users.
+        """
+        db = self.db
+        query = db.query(ConfigVersion)
+        if self._is_admin(current_user):
+            if user_id is not None:
+                query = query.filter_by(service_name=service_name, user_id=user_id)
+            else:
+                query = query.filter_by(service_name=service_name)
+        else:
+            if user_id is None:
+                raise ValueError("user_id is required for non-admin operations")
+            query = query.filter_by(service_name=service_name, user_id=user_id)
+
+        return query.order_by(ConfigVersion.version.desc()).all()
+
+    def list_all_configs_for_user(self, user_id: Optional[int] = None, current_user: Optional[User] = None):
+        """Helper to list current service configs. If admin and user_id is None, returns all configs."""
+        query = self.db.query(ServiceConfig)
+        if self._is_admin(current_user):
+            if user_id is not None:
+                query = query.filter_by(user_id=user_id)
+            # else admin: no filter -> return everything
+        else:
+            if user_id is None:
+                raise ValueError("user_id is required for non-admin operations")
+            query = query.filter_by(user_id=user_id)
+
+        return query.all()
