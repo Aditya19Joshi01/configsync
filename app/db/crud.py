@@ -1,5 +1,8 @@
+from http.client import HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
+from deepdiff import DeepDiff
+
 from app.db.models import ServiceConfig, ConfigVersion, User
 from app.schemas.config_schema import ConfigUpdateSchema
 
@@ -14,10 +17,18 @@ class ConfigRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def _is_admin(self, current_user: Optional[User]) -> bool:
+    def _is_admin(
+            self,
+            current_user: Optional[User]
+    ) -> bool:
         return getattr(current_user, 'role', None) == 'admin'
 
-    def get_config(self, service_name: str, user_id: Optional[int] = None, current_user: Optional[User] = None):
+    def get_config(
+            self,
+            service_name: str,
+            user_id: Optional[int] = None,
+            current_user: Optional[User] = None
+    ):
         """Fetch the configuration for a given service. If current_user is admin and user_id is None, don't filter by user."""
         query = self.db.query(ServiceConfig)
         if self._is_admin(current_user):
@@ -34,7 +45,13 @@ class ConfigRepository:
 
         return query.first()
 
-    def update_or_create_config(self, data: ConfigUpdateSchema | None = None, config_data: ConfigUpdateSchema | None = None, user_id: int | None = None, current_user: Optional[User] = None):
+    def update_or_create_config(
+            self,
+            data: ConfigUpdateSchema | None = None,
+            config_data: ConfigUpdateSchema | None = None,
+            user_id: int | None = None,
+            current_user: Optional[User] = None
+    ):
         """Update existing config or create a new one for the given user.
 
         Admins may omit user_id to operate globally (or pass a specific user_id).
@@ -79,7 +96,12 @@ class ConfigRepository:
         self.add_new_version(db_config.name, input_data.config, db_config.user_id)
         return db_config
 
-    def get_latest_version(self, service_name: str, user_id: int, current_user: Optional[User] = None):
+    def get_latest_version(
+            self,
+            service_name: str,
+            user_id: int,
+            current_user: Optional[User] = None
+    ):
         """Fetch the latest configuration version for a given service for the user."""
         db = self.db
         query = db.query(ConfigVersion)
@@ -93,7 +115,12 @@ class ConfigRepository:
 
         return query.order_by(ConfigVersion.version.desc()).first()
 
-    def add_new_version(self, service_name: str, config: dict, user_id: int):
+    def add_new_version(
+            self,
+            service_name: str,
+            config: dict,
+            user_id: int
+    ):
         """Add a new configuration version for a given service for the user."""
         latest_version = self.get_latest_version(service_name, user_id)
         new_version_number = (
@@ -111,7 +138,12 @@ class ConfigRepository:
         self.db.refresh(new_version)
         return new_version
 
-    def list_versions(self, service_name: str, user_id: Optional[int] = None, current_user: Optional[User] = None):
+    def list_versions(
+            self,
+            service_name: str,
+            user_id: Optional[int] = None,
+            current_user: Optional[User] = None
+    ):
         """List all configuration versions for a given service for the user.
 
         Admins may omit user_id to list across all users.
@@ -130,7 +162,11 @@ class ConfigRepository:
 
         return query.order_by(ConfigVersion.version.desc()).all()
 
-    def list_all_configs_for_user(self, user_id: Optional[int] = None, current_user: Optional[User] = None):
+    def list_all_configs_for_user(
+            self,
+            user_id: Optional[int] = None,
+            current_user: Optional[User] = None
+    ):
         """Helper to list current service configs. If admin and user_id is None, returns all configs."""
         query = self.db.query(ServiceConfig)
         if self._is_admin(current_user):
@@ -143,3 +179,48 @@ class ConfigRepository:
             query = query.filter_by(user_id=user_id)
 
         return query.all()
+
+    def diff_versions(
+            self,
+            service_name: str,
+            version1_id: int,
+            version2_id: int,
+            user_id: int
+    ):
+        """Compute the diff between two configuration versions for a given service and user."""
+        v1 = self.db.query(ConfigVersion).filter_by(
+            service_name=service_name, user_id=user_id, id=version1_id
+        ).first()
+        v2 = self.db.query(ConfigVersion).filter_by(
+            service_name=service_name, user_id=user_id, id=version2_id
+        ).first()
+
+        if not v1 or not v2:
+            raise HTTPException(status_code=404, detail="One or both versions not found")
+
+        diff = DeepDiff(v1.config, v2.config, ignore_order=True).to_dict()
+        return {
+            "service": service_name,
+            "version1": version1_id,
+            "version2": version2_id,
+            "diff": diff
+        }
+
+    def delete_config(
+            self,
+            service_name: str,
+            user_id: Optional[int] = None,
+            current_user: Optional[User] = None
+    ):
+        """Delete a service configuration for the given user.
+
+        Admins may omit user_id to delete globally (or pass a specific user_id).
+        """
+        db_config = self.get_config(service_name, user_id=user_id, current_user=current_user)
+
+        if not db_config:
+            raise HTTPException(status_code=404, detail="Service config not found")
+
+        self.db.delete(db_config)
+        self.db.commit()
+        return True

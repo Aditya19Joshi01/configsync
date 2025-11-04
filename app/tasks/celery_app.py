@@ -11,6 +11,8 @@ celery_app = Celery(
 celery_app.conf.task_routes = {
     "app.tasks.logger.log_config_update": {"queue": "default"},
     "app.tasks.logger.log_config_retrieval": {"queue": "default"},
+    "app.tasks.logger.log_config_delete": {"queue": "default"},
+    "app.tasks.logger.log_config_version_compare": {"queue": "default"},
     "app.tasks.logger.user_login_log": {"queue": "default"},
     "app.tasks.logger.user_logout_log": {"queue": "default"},
     "app.tasks.logger.user_registration_log": {"queue": "default"}
