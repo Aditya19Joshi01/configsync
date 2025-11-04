@@ -1,9 +1,0 @@
-[2025-11-04 11:36:19] New user registered with email 'user@example.com' with user privileges
-[2025-11-04 11:36:33] User 'user@example.com' logged in
-[2025-11-04 11:37:27] User 'user@example.com' updated config for service 'test-1'
-[2025-11-04 11:37:38] User 'user@example.com' updated config for service 'test-1'
-[2025-11-04 11:37:57] User 'user@example.com' retrieved config for service 'test-1'
-[2025-11-04 11:39:34] User 'user@example.com' logged out
-[2025-11-04 11:43:01] User 'user@example.com' logged in
-[2025-11-04 11:43:28] User 'user@example.com' updated config for service 'test-1'
-[2025-11-04 11:43:35] User 'user@example.com' updated config for service 'test-1'

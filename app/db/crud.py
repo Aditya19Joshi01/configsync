@@ -1,4 +1,4 @@
-from http.client import HTTPException
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
 from deepdiff import DeepDiff
@@ -149,6 +149,7 @@ class ConfigRepository:
         Admins may omit user_id to list across all users.
         """
         db = self.db
+        print("Attempting to list versions with user_id:", user_id)
         query = db.query(ConfigVersion)
         if self._is_admin(current_user):
             if user_id is not None:
@@ -160,6 +161,7 @@ class ConfigRepository:
                 raise ValueError("user_id is required for non-admin operations")
             query = query.filter_by(service_name=service_name, user_id=user_id)
 
+        print("Constructed query for listing versions:", query)
         return query.order_by(ConfigVersion.version.desc()).all()
 
     def list_all_configs_for_user(
@@ -224,3 +226,55 @@ class ConfigRepository:
         self.db.delete(db_config)
         self.db.commit()
         return True
+
+    def rollback_to_version(
+            self,
+            service_name: str,
+            target_version_id: int,
+            user_id: Optional[int] = None,
+            current_user: Optional[User] = None,
+    ):
+        """Rollback the current configuration to a specified previous version.
+
+        - Admins: may pass user_id or omit to rollback the first match across users for the service.
+        - Non-admins: user_id is required and must match the caller (enforced via routes typically).
+        """
+        # Determine scoping based on role
+        is_admin = self._is_admin(current_user)
+
+        # Locate target version with appropriate scoping
+        version_query = self.db.query(ConfigVersion).filter_by(service_name=service_name)
+        if is_admin:
+            if user_id is not None:
+                version_query = version_query.filter_by(user_id=user_id)
+            # else admin without user_id: no extra filter
+        else:
+            if user_id is None:
+                raise HTTPException(status_code=400, detail="user_id is required for non-admin operations")
+            version_query = version_query.filter_by(user_id=user_id)
+
+        target_version = version_query.filter_by(id=target_version_id).first()
+        if not target_version:
+            raise HTTPException(status_code=404, detail="Version not found")
+
+        effective_user_id = target_version.user_id
+
+        # Fetch current active config for the same owner
+        current_config = (
+            self.db.query(ServiceConfig)
+            .filter_by(name=service_name, user_id=effective_user_id)
+            .first()
+        )
+        if not current_config:
+            raise HTTPException(status_code=404, detail="Active config not found")
+
+        # Apply rollback and persist
+        current_config.config = target_version.config
+        self.db.commit()
+        self.db.refresh(current_config)
+
+        # Add new version entry documenting the rollback snapshot
+        self.add_new_version(service_name, target_version.config, effective_user_id)
+
+        # Return the ORM object so response_model=ConfigResponse can serialize it
+        return current_config

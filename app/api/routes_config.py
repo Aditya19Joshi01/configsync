@@ -9,7 +9,8 @@ from app.schemas.config_schema import ConfigResponse, ConfigUpdateSchema
 from app.core.security import get_current_user
 from app.tasks.logger import (
     log_config_update, log_config_retrieval,
-    log_config_update_sync, log_config_retrieval_sync
+    log_config_update_sync, log_config_retrieval_sync, log_config_delete, log_config_version_compare,
+    log_config_version_compare_sync, log_config_version_rollback, log_config_version_rollback_sync
 )
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
@@ -144,6 +145,45 @@ def list_versions(
     return {"service_name": service_name, "versions": versions}
 
 
+@router.post("/rollback/{service_name}", response_model=ConfigResponse, dependencies=[Depends(get_current_user)])
+def rollback_config(
+        service_name: str,
+        target_version_id: int = Query(..., description="ID of the version to roll back to"),
+        db: Session = Depends(get_db),
+        user: User = Depends(get_current_user),
+        target_user_id: Optional[int] = Query(None, description="(admin-only) user id to roll back config for")
+):
+    """
+    Rollback the configuration of a given service to a specified version.
+    - Admins: may pass `target_user_id` to roll back another user's config.
+    - Normal users: roll back their own config only.
+    """
+    repo = ConfigRepository(db)
+
+    if getattr(user, 'role', None) != 'admin':
+        target_user_id = user.id
+
+    rolled_back = repo.rollback_to_version(
+        service_name,
+        target_version_id,
+        user_id=target_user_id,
+    )
+    try:
+        log_config_version_rollback.delay(
+            service_name=service_name,
+            user_email=user.email,
+            target_version=target_version_id
+        )
+    except Exception as e:
+        print(f"[routes_config] failed to enqueue log_config_version_rollback: {e}")
+        log_config_version_rollback_sync(
+            service_name,
+            user.email,
+            target_version_id
+        )
+    return rolled_back
+
+
 @router.get("/diff/{service_name}", dependencies=[Depends(get_current_user)])
 def diff_versions(
         service_name: str,
@@ -164,6 +204,22 @@ def diff_versions(
         target_user_id = user.id
 
     diff_result = repo.diff_versions(service_name, version1_id, version2_id, user_id=target_user_id)
+
+    try:
+        log_config_version_compare.delay(
+            service_name=service_name,
+            user_email=user.email,
+            version1=version1_id,
+            version2=version2_id
+        )
+    except Exception as e:
+        print(f"[routes_config] failed to enqueue log_config_version_compare: {e}")
+        log_config_version_compare_sync(
+            service_name,
+            user.email,
+            version1_id,
+            version2_id
+        )
     return diff_result
 
 
@@ -190,4 +246,9 @@ def delete_config(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Service config not found"
         )
+    try:
+        log_config_delete.delay(service_name=service_name, user_email=user.email)
+    except Exception as e:
+        print(f"[routes_config] failed to enqueue log_config_update: {e}")
+        log_config_update_sync(service_name, user.email)
     return {"detail": "Service config deleted successfully"}

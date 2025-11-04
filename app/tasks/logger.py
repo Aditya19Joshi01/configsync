@@ -60,6 +60,14 @@ def log_config_version_compare_sync(service_name: str, user_email: str, version1
     print(f"[logger.sync.log_config_version_compare] done: service={service_name}, user={user_email}, v1={version1}, v2={version2}")
 
 
+def log_config_version_rollback_sync(service_name: str, user_email: str, target_version: int):
+    print(f"[logger.sync.log_config_version_rollback] start: service={service_name}, user={user_email}, target_version={target_version}")
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_line = f"[{timestamp}] User '{user_email}' rolled back config for service '{service_name}' to version {target_version}\n"
+    _write_log_line(log_line)
+    print(f"[logger.sync.log_config_version_rollback] done: service={service_name}, user={user_email}, target_version={target_version}")
+
+
 def user_login_log_sync(user_email: str):
     print(f"[logger.sync.user_login_log] start: user={user_email}")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -105,6 +113,10 @@ def log_config_delete(self, service_name: str, user_email: str):
 @celery_app.task(bind=True)
 def log_config_version_compare(self, service_name: str, user_email: str, version1: int, version2: int):
     log_config_version_compare_sync(service_name, user_email, version1, version2)
+
+@celery_app.task(bind=True)
+def log_config_version_rollback(self, service_name: str, user_email: str, target_version: int):
+    log_config_version_rollback_sync(service_name, user_email, target_version)
 
 @celery_app.task(bind=True)
 def user_login_log(self, user_email: str):
