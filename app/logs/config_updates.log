@@ -7,3 +7,23 @@
 [2025-11-05 12:32:08] User 'admin@example.com' updated config for service 'user-service'
 [2025-11-05 12:45:03] New user registered with email 'newuser@example.com' with user privileges
 [2025-11-05 12:46:52] New user registered with email 'newadmin@example.com' with admin privileges
+[2025-11-05 12:48:41] User 'testuser@example.com' logged in
+[2025-11-05 12:50:31] User 'testuser@example.com' logged out
+[2025-11-05 12:52:21] User 'testuser@example.com' logged out
+[2025-11-05 12:54:10] User 'testuser@example.com' logged out
+[2025-11-05 12:55:59] User 'testuser@example.com' updated config for service 'my-service'
+[2025-11-05 12:57:49] User 'testuser@example.com' updated config for service 'existing-service'
+[2025-11-05 12:59:38] User 'testuser@example.com' updated config for service 'versioned-service'
+[2025-11-05 13:01:27] User 'testuser@example.com' updated config for service 'admin-service'
+[2025-11-05 13:03:16] User 'testuser@example.com' retrieved config for service 'retrieve-service'
+[2025-11-05 13:05:05] User 'testuser@example.com' retrieved config for service 'nonexistent-service'
+[2025-11-05 13:06:54] User 'testuser@example.com' retrieved config for service 'service-one'
+[2025-11-05 13:08:43] User 'testuser@example.com' retrieved config for service 'service-two'
+[2025-11-05 13:10:32] User 'testuser@example.com' retrieved config for service 'user-service'
+[2025-11-05 13:12:22] User 'admin@example.com' retrieved config for service 'user-service'
+[2025-11-05 13:14:12] User 'admin@example.com' retrieved config for service 'user-service'
+[2025-11-05 13:16:01] User 'admin@example.com' updated config for service 'user-service'
+[2025-11-05 13:17:51] User 'testuser@example.com' rolled back config for service 'app' to version 1
+[2025-11-05 13:19:40] User 'testuser@example.com' rolled back config for service 'app' to version 1
+[2025-11-05 13:21:30] User 'testuser@example.com' compared versions 1 and 2 for service 'app'
+[2025-11-05 13:23:19] User 'testuser@example.com' compared versions 1 and 2 for service 'app'
