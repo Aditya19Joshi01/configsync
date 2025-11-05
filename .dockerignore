@@ -5,12 +5,14 @@ __pycache__/
 *.pyd
 *.db
 *.sqlite
+.venv/
 
 # Ignore test files
 tests/
 requirements-dev.txt
 .coverage
 pytest_cache/
+pytest.ini
 
 # Ignore logs and temp
 app/logs/*
@@ -19,6 +21,7 @@ app/logs/*
 # Ignore VCS
 .git/
 .gitignore
+.github/
 
 # Ignore IDE/editor
 .vscode/
@@ -27,3 +30,9 @@ app/logs/*
 # Ignore local Docker stuff
 docker-compose.override.yml
 .env
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+desktop.ini
+README.md
