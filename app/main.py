@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 import fastapi_cdn_host
+import os
 
 from app.db import models
 from app.db.database import engine
@@ -18,7 +19,9 @@ fastapi_cdn_host.patch_docs(app)
 
 @app.on_event("startup")
 def on_startup():
-    models.Base.metadata.create_all(bind=engine)
+    # Skip database creation during tests - tests manage their own DB
+    if os.getenv("TESTING") != "true":
+        models.Base.metadata.create_all(bind=engine)
 
 @app.get("/")
 def read_root():

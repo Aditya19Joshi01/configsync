@@ -1,8 +1,27 @@
-.venv
-.gitignore
+# Ignore local files
 __pycache__/
 *.pyc
-.env
-.DS_Store
+*.pyo
+*.pyd
+*.db
+*.sqlite
+
+# Ignore test files
+tests/
+requirements-dev.txt
+
+# Ignore logs and temp
+app/logs/*
+!app/logs/.gitkeep
+
+# Ignore VCS
+.git/
+.gitignore
+
+# Ignore IDE/editor
 .vscode/
 .idea/
+
+# Ignore local Docker stuff
+docker-compose.override.yml
+.env
