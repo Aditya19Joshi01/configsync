@@ -1,8 +1,8 @@
 # ⚙️ ConfigSync — Centralized Configuration Management System
 
-**ConfigSync** is a self-hosted **configuration management platform** built with **FastAPI**, designed to centralize and securely manage environment variables and configuration files across microservices.
+**ConfigSync** is a self-hosted **configuration management platform** built with **FastAPI**, designed to securely manage and version environment variables and configuration files across microservices.
 
-It eliminates scattered `.env` files, ensures **consistent configuration across environments**, and provides a single API for **storing**, **fetching**, **versioning**, **comparing**, **deleting**, and **rolling back** configurations — all with **asynchronous background logging** via **Celery + Redis**.
+It provides a single API for **storing**, **fetching**, **comparing**, **deleting**, and **rolling back** configurations — backed by **PostgreSQL** persistence, **Celery + Redis** asynchronous audit logging, and a **comprehensive automated test suite** with 91% coverage.
 
 ---
 
@@ -11,16 +11,16 @@ It eliminates scattered `.env` files, ensures **consistent configuration across 
 ### ✅ Core Functionality
 
 * **FastAPI backend** with modular architecture
-* **PostgreSQL** + **SQLAlchemy** for persistent storage
-* **Alembic** for database migrations
-* **JWT-based authentication** with **role-based access (admin/user)**
-* **Token revocation** to invalidate active sessions
-* **Config versioning and rollback support**
-* **Config diffing** between any two saved versions
-* **Celery + Redis** for background audit logging
+* **PostgreSQL + SQLAlchemy** for reliable data storage
+* **Alembic** migrations for schema versioning
+* **JWT-based authentication** with **role-based access control** (admin/user)
+* **Token revocation** for secure session management
+* **Full configuration versioning and rollback** support
+* **JSON diffing** to compare any two historical versions
+* **Celery + Redis** for asynchronous audit logging
 * **Containerized** using Docker + Docker Compose
-* **Persistent Postgres volumes** for data durability
-* **Hot reload** for development environments
+* **Persistent PostgreSQL volumes** for data durability
+* **CI pipeline** with **pytest + coverage reports** for continuous testing
 
 ---
 
@@ -39,56 +39,86 @@ It eliminates scattered `.env` files, ensures **consistent configuration across 
        (Persistent DB)      Broker/Queue     (Async Logging)
 ```
 
-### 🔄 Flow Example
+### 🔄 Example Flow
 
-1. User sends a `POST /config/update` request.
-2. FastAPI stores the new config and creates a version record in **PostgreSQL**.
-3. A **Celery task** logs the update asynchronously.
-4. The Celery worker writes structured logs into `app/logs/config_logs.log`.
-5. The API instantly responds — keeping the system responsive and reliable.
+1. A user sends a `POST /config/update` request.
+2. FastAPI updates the configuration in **PostgreSQL**, creating a new version.
+3. A **Celery task** asynchronously logs the change.
+4. The Celery worker writes structured entries into `app/logs/config_logs.log`.
+5. The API returns immediately — ensuring responsive performance even under load.
 
 ---
 
 ## 🧩 Key API Endpoints
 
-| Method   | Endpoint                                                        | Description                       | Auth |
-| -------- | --------------------------------------------------------------- | --------------------------------- | ---- |
-| `POST`   | `/auth/register`                                                | Register a new user               | ❌    |
-| `POST`   | `/auth/login`                                                   | Login and get JWT                 | ❌    |
-| `POST`   | `/auth/logout`                                                  | Revoke token (logout)             | ✅    |
-| `GET`    | `/config/list`                                                  | List all configs (scoped by role) | ✅    |
-| `GET`    | `/config/get?service=<name>`                                    | Fetch configuration               | ✅    |
-| `POST`   | `/config/update`                                                | Create or update configuration    | ✅    |
-| `GET`    | `/config/versions?name=<service>`                               | List historical versions          | ✅    |
-| `GET`    | `/config/diff?service=<name>&version1_id=<id>&version2_id=<id>` | Compare two versions (JSON diff)  | ✅    |
-| `POST`   | `/config/rollback?service=<name>&version_id=<id>`               | Roll back to a previous version   | ✅    |
-| `DELETE` | `/config/delete?service=<name>`                                 | Delete configuration              | ✅    |
-| `GET`    | `/config/health`                                                | Health check (DB connectivity)    | ❌    |
+| Method   | Endpoint                                                        | Description                              | Auth |
+| -------- | --------------------------------------------------------------- | ---------------------------------------- | ---- |
+| `POST`   | `/auth/register`                                                | Register a new user                      | ❌    |
+| `POST`   | `/auth/login`                                                   | Login and obtain JWT                     | ❌    |
+| `POST`   | `/auth/logout`                                                  | Revoke JWT token (logout)                | ✅    |
+| `GET`    | `/config/list`                                                  | List all configurations (scoped by role) | ✅    |
+| `GET`    | `/config/get?service=<name>`                                    | Fetch configuration by service           | ✅    |
+| `POST`   | `/config/update`                                                | Create or update configuration           | ✅    |
+| `GET`    | `/config/versions?name=<service>`                               | View configuration history               | ✅    |
+| `GET`    | `/config/diff?service=<name>&version1_id=<id>&version2_id=<id>` | Compare two versions (JSON diff)         | ✅    |
+| `POST`   | `/config/rollback?service=<name>&version_id=<id>`               | Roll back to a previous version          | ✅    |
+| `DELETE` | `/config/delete?service=<name>`                                 | Delete configuration                     | ✅    |
+| `GET`    | `/config/health`                                                | Health check (DB + Redis status)         | ❌    |
 
 ---
 
 ### 🔐 Role-Based Access Control
 
-| Role    | Permissions                          |
-| ------- | ------------------------------------ |
-| `admin` | Full access to all configs and users |
-| `user`  | Limited to own configurations        |
+| Role    | Permissions                                 |
+| ------- | ------------------------------------------- |
+| `admin` | Full access to all users and configurations |
+| `user`  | Limited to their own configurations         |
 
-Admins can perform rollback, version comparison, and deletions for any user by specifying a `target_user_id` query param.
+Admins can perform diffing, rollback, or deletions for other users using `target_user_id` query parameters.
 
 ---
 
-## 🧾 Audit Logging with Celery
+## 🧾 Asynchronous Audit Logging
 
-Every major action — registration, login, update, retrieval, rollback, and deletion — is asynchronously logged using **Celery tasks**.
+All configuration and authentication actions — **register, login, update, delete, rollback** — are logged through **Celery background tasks**.
 
-If Redis or Celery is unavailable, the app automatically falls back to synchronous logging to avoid data loss.
+If Celery or Redis are temporarily unavailable, the system gracefully falls back to synchronous logging to avoid data loss.
 
-All logs are stored under:
+Logs are written to:
 
 ```
 app/logs/config_logs.log
 ```
+
+---
+
+## 🧪 Continuous Integration & Testing
+
+ConfigSync uses **GitHub Actions CI** to automatically test and validate every commit.
+
+| Metric                | Result                                     |
+| --------------------- | ------------------------------------------ |
+| **Tests executed**    | 37                                         |
+| **Coverage**          | 91%                                        |
+| **Warnings**          | 1 (Pydantic v2 migration notice)           |
+| **CI Runtime**        | ~7m 30s                                    |
+| **Testing Toolchain** | `pytest`, `pytest-cov`, `asyncio`, `anyio` |
+
+Example coverage summary:
+
+```
+TOTAL 531 statements, 49 missed → 91% coverage
+All 37 tests passed ✅
+```
+
+Tests cover:
+
+* Authentication & JWT lifecycle
+* Role-based access enforcement
+* CRUD operations for configurations
+* Version history, diffing, and rollback
+* Admin override capabilities
+* Token revocation and invalid token handling
 
 ---
 
@@ -101,9 +131,11 @@ app/logs/config_logs.log
 | **Database**             | PostgreSQL              |
 | **ORM**                  | SQLAlchemy              |
 | **Migrations**           | Alembic                 |
-| **Auth**                 | JWT + Token Revocation  |
+| **Auth**                 | JWT + Revocation        |
 | **Async Tasks**          | Celery + Redis          |
 | **Containerization**     | Docker + Docker Compose |
+| **Testing**              | pytest + coverage       |
+| **CI/CD**                | GitHub Actions          |
 | **Monitoring (planned)** | Prometheus + Grafana    |
 
 ---
@@ -126,17 +158,26 @@ ConfigSync/
 │   ├── tasks/
 │   │   ├── celery_app.py
 │   │   └── logger.py
+│   ├── schemas/
+│   │   ├── auth_schema.py
+│   │   └── config_schema.py
 │   ├── logs/
 │   │   └── config_logs.log
-│   └── schemas/
-│       ├── auth_schema.py
-│       └── config_schema.py
+│   └── main.py
+├── tests/
+│   ├── conftest.py
+│   ├── test_auth.py
+│   ├── test_config.py
+│   └── test_versioning.py
 ├── alembic/
 │   ├── env.py
 │   └── versions/
-├── Dockerfile
 ├── docker-compose.yml
+├── Dockerfile
+├── pytest.ini
+├── alembic.ini
 ├── requirements.txt
+├── requirements-dev.txt
 └── README.md
 ```
 
@@ -145,26 +186,26 @@ ConfigSync/
 ## ⚡ Quick Start (Docker Compose)
 
 ```bash
-# 1. Build and start all services
+# 1️⃣ Build and start services
 docker-compose up --build
 
-# 2. Run in background
+# 2️⃣ Run in background
 docker-compose up -d
 
-# 3. View Celery logs
+# 3️⃣ View Celery worker logs
 docker-compose logs -f worker
 
-# 4. Stop containers
+# 4️⃣ Stop and clean up
 docker-compose down
 ```
 
-*(PostgreSQL data persists via the named volume `configsync_data`.)*
+*(PostgreSQL data persists in the `configsync_data` volume.)*
 
 ---
 
 ## 🔬 API Testing Examples
 
-### Register a New User
+### Register a User
 
 ```bash
 curl -X POST "http://localhost:8000/auth/register" \
@@ -172,15 +213,14 @@ curl -X POST "http://localhost:8000/auth/register" \
   -d '{"username": "alice", "email": "alice@mail.com", "password": "secret123"}'
 ```
 
-### Login and Get Token
+### Login
 
 ```bash
 curl -X POST "http://localhost:8000/auth/login" \
-  -F "username=alice" \
-  -F "password=secret123"
+  -F "username=alice" -F "password=secret123"
 ```
 
-### Update or Create a Config
+### Create or Update Config
 
 ```bash
 curl -X POST "http://localhost:8000/config/update" \
@@ -189,21 +229,21 @@ curl -X POST "http://localhost:8000/config/update" \
   -d '{"name": "payment-service", "config": {"TIMEOUT": 30, "URL": "https://api.example.com"}}'
 ```
 
-### Diff Between Two Versions
+### Compare Two Versions
 
 ```bash
 curl "http://localhost:8000/config/diff?service=payment-service&version1_id=2&version2_id=4" \
   -H "Authorization: Bearer <JWT_TOKEN>"
 ```
 
-### Rollback to a Previous Version
+### Roll Back
 
 ```bash
 curl -X POST "http://localhost:8000/config/rollback?service=payment-service&version_id=2" \
   -H "Authorization: Bearer <JWT_TOKEN>"
 ```
 
-### Delete a Config
+### Delete Config
 
 ```bash
 curl -X DELETE "http://localhost:8000/config/delete?service=payment-service" \
@@ -214,31 +254,33 @@ curl -X DELETE "http://localhost:8000/config/delete?service=payment-service" \
 
 ## 🔐 Environment Variables
 
-| Variable       | Description                           | Default                                                 |
-| -------------- | ------------------------------------- | ------------------------------------------------------- |
-| `DATABASE_URL` | PostgreSQL connection URI             | `postgresql://configsync:configsync@db:5432/configsync` |
-| `SECRET_KEY`   | JWT signing key                       | `supersecretjwtkey`                                     |
-| `API_KEY`      | Service-to-service authentication key | `supersecretkey`                                        |
-| `REDIS_URL`    | Redis connection URI                  | `redis://redis:6379/0`                                  |
-| `PROJECT_NAME` | Display name for API                  | `ConfigSync`                                            |
+| Variable       | Description                | Default                                                 |
+| -------------- | -------------------------- | ------------------------------------------------------- |
+| `DATABASE_URL` | PostgreSQL connection URI  | `postgresql://configsync:configsync@db:5432/configsync` |
+| `SECRET_KEY`   | JWT signing key            | `supersecretjwtkey`                                     |
+| `API_KEY`      | Service authentication key | `supersecretkey`                                        |
+| `REDIS_URL`    | Redis connection URI       | `redis://redis:6379/0`                                  |
+| `PROJECT_NAME` | Display name for API       | `ConfigSync`                                            |
 
 ---
 
-## 💡 Why This Project Matters
+## 💡 Why ConfigSync Matters
 
-Modern microservice systems need reliable, auditable, and versioned configuration control.
-**ConfigSync** provides a developer-friendly internal alternative to **AWS Parameter Store** or **HashiCorp Vault**, offering:
+Modern teams juggle multiple environments and microservices — ConfigSync ensures:
 
-* Centralized configuration APIs
-* Full versioning and rollback
-* Asynchronous audit logging
-* Containerized, cloud-ready deployment
+* **Centralized configuration access**
+* **Version control & rollback safety**
+* **Asynchronous, auditable logging**
+* **Production-ready containerization**
+* **Full CI/CD compatibility**
+
+It acts as a lightweight, self-hosted alternative to **AWS Parameter Store** or **HashiCorp Vault**, tailored for smaller or internal developer teams.
 
 ---
 
 ## 💬 Resume Highlight
 
-> **Built “ConfigSync” — a FastAPI-based configuration management system with JWT authentication, versioning, rollback, and Celery + Redis for asynchronous logging. Containerized via Docker Compose with PostgreSQL persistence and role-based access control.**
+> **Built “ConfigSync” — a FastAPI-based configuration management system with JWT auth, versioning, rollback, and Celery + Redis asynchronous logging. Added CI integration with pytest coverage (91%), Alembic migrations, and Dockerized PostgreSQL persistence with role-based access control.**
 
 ---
 
