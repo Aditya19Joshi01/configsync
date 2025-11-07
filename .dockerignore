@@ -9,7 +9,7 @@ __pycache__/
 
 # Ignore test files
 tests/
-requirements-dev.txt
+requirements-test.txt
 .coverage
 pytest_cache/
 pytest.ini

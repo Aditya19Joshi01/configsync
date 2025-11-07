@@ -27,3 +27,10 @@
 [2025-11-05 13:19:40] User 'testuser@example.com' rolled back config for service 'app' to version 1
 [2025-11-05 13:21:30] User 'testuser@example.com' compared versions 1 and 2 for service 'app'
 [2025-11-05 13:23:19] User 'testuser@example.com' compared versions 1 and 2 for service 'app'
+[2025-11-06 17:33:40] New user registered with email 'admin@example.com' with admin privileges
+[2025-11-06 17:35:14] New user registered with email 'sandy@example.com' with user privileges
+[2025-11-06 17:35:27] User 'sandy@example.com' logged in
+[2025-11-06 17:35:49] User 'sandy@example.com' updated config for service 'string'
+[2025-11-06 17:36:24] User 'sandy@example.com' updated config for service 'string-2'
+[2025-11-06 17:36:37] User 'sandy@example.com' retrieved config for service 'string-2'
+[2025-11-06 17:36:37] User 'sandy@example.com' retrieved config for service 'string'

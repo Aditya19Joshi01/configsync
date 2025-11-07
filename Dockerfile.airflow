@@ -1,0 +1,11 @@
+FROM apache/airflow:2.9.3-python3.11
+
+# Copy custom DAGs and requirements
+COPY airflow/dags /opt/airflow/dags
+COPY requirements-airflow.txt /requirements-airflow.txt
+
+# Install airflow + extras
+RUN pip install --no-cache-dir -r /requirements-airflow.txt
+
+# Default working directory
+WORKDIR /opt/airflow

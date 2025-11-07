@@ -1,0 +1,12 @@
+# --- Core Airflow installation ---
+apache-airflow==2.9.3
+
+# --- Extras ---
+apache-airflow-providers-postgres
+apache-airflow-providers-redis
+apache-airflow-providers-http
+
+# --- Optional utils for DAGs ---
+requests
+boto3         # if you plan to upload backups to S3 later
+psycopg2-binary  # allows PostgresOperator

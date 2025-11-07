@@ -1,6 +1,7 @@
 # app.api package initializer
-# Keep this module lightweight to avoid importing routers at package import time.
-# Import specific routers where needed, e.g. `from app.api import auth` or
-# `from app.api.routes_config import router`.
+# Exposes API routers for the application.
+from .auth import router as auth_router
+from .routes_config import router as config_router
 
-__all__ = []
+__all__ = ["auth_router", "config_router"]
+

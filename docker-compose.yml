@@ -13,6 +13,7 @@ services:
       - "${DB_PORT}:5432"
     volumes:
       - configsync_data:/var/lib/postgresql/data
+      - ./init-multiple-dbs.sql:/docker-entrypoint-initdb.d/init-multiple-dbs.sql
 
   backend:
     build: .
@@ -51,6 +52,56 @@ services:
       - backend
       - redis
       - db
+
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: configsync-airflow
+    restart: always
+    depends_on:
+      - db
+      - redis
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://configsync:configsync@db:5432/airflow_db
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CORE__FERNET_KEY=yourfernetkeyhere
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - _AIRFLOW_WWW_USER_CREATE=True
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    ports:
+      - "8080:8080"
+    command: bash -c "
+      airflow db check || airflow db init;
+      sleep 5;
+      airflow users create \
+      -u admin -p admin -r Admin -e admin@example.com -f Admin -l User || true;
+      exec airflow webserver"
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: configsync-scheduler
+    restart: always
+    depends_on:
+      - db
+      - redis
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://configsync:configsync@db:5432/airflow_db
+      - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
+      - AIRFLOW__CORE__FERNET_KEY=yourfernetkeyhere
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    command: bash -c "
+      sleep 5;
+      exec airflow scheduler"
 
 volumes:
   configsync_data:
